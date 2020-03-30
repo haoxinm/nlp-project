@@ -15,22 +15,24 @@ from . import FairseqCriterion, register_criterion
 import torch
 from semsim.rewarder import Rewarder
 
-def sesim_loss(lprobs, target, epsilon, task=None, bpe=None, rewarder=None, output_tokens=None, ignore_index=None, reduce=True, loss_weight=None, debug=False):
+
+def sesim_loss(lprobs, target, epsilon, task=None, bpe=None, rewarder=None, output_tokens=None, ignore_index=None,
+               reduce=True, loss_weight=None, debug=False):
     if loss_weight is None:
         loss_weight = 100
     ## semantic sim_loss
-    sentence_tok = torch.argmax(utils.log_softmax(output_tokens, dim=-1),-1) # maxpool
-    sentence_txt = bpe.decode(task.target_dictionary.string(sentence_tok)) 
+    sentence_tok = torch.argmax(utils.log_softmax(output_tokens, dim=-1), -1)  # maxpool
+    sentence_txt = bpe.decode(task.target_dictionary.string(sentence_tok))
 
     if ignore_index is not None:
         non_pad_mask = target.ne(ignore_index)
-        target_ig=target[non_pad_mask]
+        target_ig = target[non_pad_mask]
 
     target_txt = bpe.decode(task.target_dictionary.string(target_ig))
 
     semsim_score = rewarder(target_txt, sentence_txt)
     if debug:
-        print("\n\n## sentence_txt: ", sentence_txt,"\n## target_txt: ",  target_txt, "\n## Reward :", semsim_score)
+        print("\n\n## sentence_txt: ", sentence_txt, "\n## target_txt: ", target_txt, "\n## Reward :", semsim_score)
 
     if target.dim() == lprobs.dim() - 1:
         target = target.unsqueeze(-1)
@@ -49,15 +51,15 @@ def sesim_loss(lprobs, target, epsilon, task=None, bpe=None, rewarder=None, outp
     eps_i = epsilon / lprobs.size(-1)
     loss = (1. - epsilon) * nll_loss + eps_i * smooth_loss
     if debug:
-        print("nll_loss, smooth_loss: ",  nll_loss, smooth_loss)
-        print("normal_loss, reward: ",  loss, semsim_score)
+        print("nll_loss, smooth_loss: ", nll_loss, smooth_loss)
+        print("normal_loss, reward: ", loss, semsim_score)
     loss = loss - loss_weight * semsim_score
     # LOG : loss
     # was 1:1, increased to 1: 100 | 20191212
     # original : loss + 100*semsim_score, neg : loss - 100*semsim_score | 20191212
     if debug:
-        print("==="*10)
-    return loss, nll_loss, semsim_score # semsim_score : semsim_score
+        print("===" * 10)
+    return loss, nll_loss, semsim_score  # semsim_score : semsim_score
 
 
 @register_criterion('semantic_similarity_loss')
@@ -68,16 +70,15 @@ class SemanticSimilarityCriterion(FairseqCriterion):
         self.eps = args.label_smoothing
         self.task = task
         self.debugCount = 0
-        args.bpe='gpt2'
+        args.bpe = 'gpt2'
         self.bpe = encoders.build_bpe(args)
         """
         if args.rewarderpath == None:
             args.rewarderpath = "./semsim/trained_models/" + args.restore_file.split('/')[-1] # TODO : refactoring required
             print("args.rewarderpath not set : use %s instead."%args.rewarderpath) """
-        args.rewarderpath = "./semsim/trained_models/sample.model" #TODO
+        args.rewarderpath = "./semsim/trained_models/sample.model"  # TODO
         self.rewarder = Rewarder(args.rewarderpath)
         self.loss_weight = args.loss_weight
-
 
     @staticmethod
     def add_args(parser):
@@ -102,16 +103,15 @@ class SemanticSimilarityCriterion(FairseqCriterion):
         logging_output = {
             'loss': utils.item(loss.data) if reduce else loss.data,
             'nll_loss': utils.item(nll_loss.data) if reduce else nll_loss.data,
-            'semsim_score': utils.item(semsim_score) if reduce else semsim_score, # semsim_score : int
+            'semsim_score': utils.item(semsim_score) if reduce else semsim_score,  # semsim_score : int
             'ntokens': sample['ntokens'],
             'nsentences': sample['target'].size(0),
             'sample_size': sample_size,
         }
         return loss, sample_size, logging_output
 
-    #SWEM
+    # SWEM
     def compute_loss(self, model, net_output, sample, reduce=True):
-
         debug = False
         self.debugCount += 1
         if self.debugCount % 500 == 1:
@@ -121,12 +121,12 @@ class SemanticSimilarityCriterion(FairseqCriterion):
         lprobs = lprobs.view(-1, lprobs.size(-1))
         target = model.get_targets(sample, net_output).view(-1, 1)
         loss, nll_loss, semsim_score = sesim_loss(
-            lprobs, target, self.eps, task=self.task, bpe=self.bpe, rewarder=self.rewarder, output_tokens=net_output[0], ignore_index=self.padding_idx, reduce=reduce, loss_weight = self.loss_weight,
+            lprobs, target, self.eps, task=self.task, bpe=self.bpe, rewarder=self.rewarder, output_tokens=net_output[0],
+            ignore_index=self.padding_idx, reduce=reduce, loss_weight=self.loss_weight,
             debug=debug
         )
 
         return loss, nll_loss, semsim_score
-
 
     @staticmethod
     def aggregate_logging_outputs(logging_outputs):
@@ -135,11 +135,13 @@ class SemanticSimilarityCriterion(FairseqCriterion):
         nsentences = sum(log.get('nsentences', 0) for log in logging_outputs)
         sample_size = sum(log.get('sample_size', 0) for log in logging_outputs)
         return {
-            'loss': sum(log.get('loss', 0) for log in logging_outputs) / sample_size / math.log(2) if sample_size > 0 else 0.,
-            'nll_loss': sum(log.get('nll_loss', 0) for log in logging_outputs) / ntokens / math.log(2) if ntokens > 0 else 0.,
-            'semsim_score': sum(log.get('semsim_score', 0) for log in logging_outputs) / sample_size / math.log(2) if sample_size > 0 else 0.,
+            'loss': sum(log.get('loss', 0) for log in logging_outputs) / sample_size / math.log(
+                2) if sample_size > 0 else 0.,
+            'nll_loss': sum(log.get('nll_loss', 0) for log in logging_outputs) / ntokens / math.log(
+                2) if ntokens > 0 else 0.,
+            'semsim_score': sum(log.get('semsim_score', 0) for log in logging_outputs) / sample_size / math.log(
+                2) if sample_size > 0 else 0.,
             'ntokens': ntokens,
             'nsentences': nsentences,
             'sample_size': sample_size,
         }
-
