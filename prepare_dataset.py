@@ -21,7 +21,6 @@ def spilt_tsv(source_file, target_file, hypo_file, output_file):
             i1_writer.writerow([target_line])
             label_writer.writerow([1])
 
-
 if __name__ == '__main__':
     base_path = 'cnn_dm/'
     for source in ['train', 'val']:

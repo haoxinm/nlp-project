@@ -46,4 +46,3 @@ def generate_data(model, source_path, target_path):
 if __name__ == '__main__':
     bart = BARTModel.from_pretrained('pretrained/BART/bart.large.mnli/', checkpoint_file='model.pt')
     generate_data(bart, 'cnn_dm/', 'cnn_dm/')
-
