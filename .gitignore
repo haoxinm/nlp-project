@@ -11,6 +11,9 @@ __pycache__/
 
 *.pt
 *.model
+input.txt
+input.txt.json
+download_glue_data.py
 
 # macOS dir files
 .DS_Store
@@ -21,6 +24,7 @@ results/
 fairseq-semsim/
 files2rouge/
 stanford-corenlp-full-2018-10-05/
+glue_data/
 
 # Checkpoints
 checkpoints

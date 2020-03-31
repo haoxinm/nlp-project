@@ -1,1 +1,54 @@
-the quick brown fox jumped over the lazy dog
+def train_ac(actor_args, actor_trainer, actor_task, actor_epoch_itr):
+    itr = actor_epoch_itr.next_actor_epoch_itr(
+        fix_batches_to_gpus=actor_args.fix_batches_to_gpus,
+        shuffle=(actor_epoch_itr.next_epoch_idx > actor_args.curriculum),
+    )
+    update_freq = (
+        actor_args.update_freq[actor_epoch_itr.epoch - 1]
+        if actor_epoch_itr.epoch <= len(actor_args.update_freq)
+        else actor_args.update_freq[-1]
+    )
+    itr = iterators.GroupedIterator(itr, update_freq)
+    progress = progress_bar.progress_bar(
+        itr,
+        log_format=actor_args.log_format,
+        log_interval=actor_args.log_interval,
+        epoch=actor_epoch_itr.epoch,
+        tensorboard_logdir=(
+            actor_args.tensorboard_logdir if distributed_utils.is_master(actor_args) else None
+        ),
+        default_log_format=('tqdm' if not actor_args.no_progress_bar else 'simple'),
+    )
+
+    # actor_task specific setup per epoch
+    actor_task.begin_epoch(actor_epoch_itr.epoch, actor_trainer.get_model())
+
+    valid_subsets = actor_args.valid_subset.split(',')
+    # max_update = actor_args.max_update or math.inf
+    for samples in progress:
+        with metrics.aggregate('train_inner'):
+            log_output = actor_trainer.train_step(samples)
+            if log_output is None:  # OOM, overflow, ...
+                continue
+
+        # log mid-epoch stats
+        num_updates = actor_trainer.get_num_updates()
+        if num_updates % actor_args.log_interval == 0:
+            stats = get_training_stats(metrics.get_smoothed_values('train_inner'))
+            progress.log(stats, tag='train_inner', step=num_updates)
+
+            # reset mid-epoch stats after each log interval
+            # the end-of-epoch stats will still be preserved
+            metrics.reset_meters('train_inner')
+
+        if (
+                not actor_args.disable_validation
+                and actor_args.save_interval_updates > 0
+                and num_updates % actor_args.save_interval_updates == 0
+                and num_updates > 0
+        ):
+            valid_losses = validate(actor_args, actor_trainer, actor_task, actor_epoch_itr, valid_subsets)
+            checkpoint_utils.save_checkpoint(actor_args, actor_trainer, actor_epoch_itr, valid_losses[0])
+
+            return actor_args, actor_trainer, actor_task, actor_epoch_itr
+    return actor_args, actor_trainer, actor_task, actor_epoch_itr

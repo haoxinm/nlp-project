@@ -46,7 +46,12 @@ class SentencePredictionCriterion(FairseqCriterion):
             features_only=True,
             classification_head_name=self.classification_head_name,
         )
+        print(sample['net_input'])
+        print("")
+        print(logits)
         targets = model.get_targets(sample, [logits]).view(-1)
+        print("")
+        print(targets)
         sample_size = targets.numel()
 
         if not self.regression_target:
