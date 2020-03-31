@@ -156,38 +156,40 @@ def main(args, init_distributed=False):
 def get_ready(args, ac='a'):
     train_args = deepcopy(args)
     if ac=='a':
+        train_args.restore_file = args.actor_path
         train_args.task = args.actor_task
         train_args.criterion = args.actor_criterion
         train_args.save_interval_updates = args.actor_save_update
     elif ac=='c':
+        train_args.restore_file = args.critic_path
         train_args.task = args.critic_task
         train_args.criterion = args.critic_criterion
         train_args.save_interval_updates = args.critic_save_update
-    task = tasks.setup_task(args)
-    model = task.build_model(args)
-    criterion = task.build_criterion(args)
+    task = tasks.setup_task(train_args)
+    model = task.build_model(train_args)
+    criterion = task.build_criterion(train_args)
     logger.info(model)
-    logger.info('model {}, criterion {}'.format(args.arch, criterion.__class__.__name__))
+    logger.info('model {}, criterion {}'.format(train_args.arch, criterion.__class__.__name__))
     logger.info('num. model params: {} (num. trained: {})'.format(
         sum(p.numel() for p in model.parameters()),
         sum(p.numel() for p in model.parameters() if p.requires_grad),
     ))
 
     # Build trainer
-    if args.model_parallel_size == 1:
-        trainer = Trainer(args, task, model, criterion)
+    if train_args.model_parallel_size == 1:
+        trainer = Trainer(train_args, task, model, criterion)
     else:
-        trainer = MegatronTrainer(args, task, model, criterion)
+        trainer = MegatronTrainer(train_args, task, model, criterion)
 
-    logger.info('training on {} GPUs'.format(args.distributed_world_size))
+    logger.info('training on {} GPUs'.format(train_args.distributed_world_size))
     logger.info('max tokens per GPU = {} and max sentences per GPU = {}'.format(
-        args.max_tokens,
-        args.max_sentences,
+        train_args.max_tokens,
+        train_args.max_sentences,
     ))
 
     # Load the latest checkpoint if one is available and restore the
     # corresponding train iterator
-    extra_state, epoch_itr = checkpoint_utils.load_checkpoint(args, trainer)
+    extra_state, epoch_itr = checkpoint_utils.load_checkpoint(train_args, trainer)
 
     return train_args, task, model, criterion, trainer, epoch_itr, extra_state
 

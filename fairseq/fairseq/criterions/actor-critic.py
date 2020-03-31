@@ -185,8 +185,9 @@ class CriticCriterion(FairseqCriterion):
 
         actor_output = self.actor(**sample['net_input'])
         actor_output_tk = actor_output.argmax(-1)
-        ub = sample['target'].size(0)
         target = model.get_targets(sample, actor_output).view(-1, 1)
+
+        ub = target.size(0)
         zeros = torch.zeros((ub, 1))
         ones = torch.ones((ub, 1))
         input_tk = sample['net_input']['src_tokens']
@@ -195,7 +196,12 @@ class CriticCriterion(FairseqCriterion):
         new_src_tokens = torch.cat([new_input_hypo, new_input_tg], dim=0)
         new_target = torch.cat([zeros, ones], dim=0)
         new_src_length = new_src_tokens.size(-1)
+
+        idx = torch.randperm(2 * ub)
+        new_src_tokens = new_src_tokens[idx]
+        new_target = new_target[idx]
         new_prev_output_tokens = new_src_tokens.roll(1, dims=-1)
+
         sample['net_input'] = {'src_tokens': new_src_tokens, 'src_length': new_src_length,
                                'prev_output_tokens': new_prev_output_tokens}
         sample['target'] = new_target
