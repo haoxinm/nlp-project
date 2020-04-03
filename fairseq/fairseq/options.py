@@ -21,6 +21,7 @@ def get_preprocessing_parser(default_task="translation"):
 
 def get_training_parser(default_task="translation"):
     parser = get_parser("Trainer", default_task)
+    # add_ac_args(parser)
     add_dataset_args(parser, train=True)
     add_distributed_training_args(parser)
     add_model_args(parser)
@@ -78,11 +79,11 @@ def eval_bool(x, default=False):
 
 
 def parse_args_and_arch(
-    parser: argparse.ArgumentParser,
-    input_args: List[str] = None,
-    parse_known: bool = False,
-    suppress_defaults: bool = False,
-    modify_parser: Optional[Callable[[argparse.ArgumentParser], None]] = None,
+        parser: argparse.ArgumentParser,
+        input_args: List[str] = None,
+        parse_known: bool = False,
+        suppress_defaults: bool = False,
+        modify_parser: Optional[Callable[[argparse.ArgumentParser], None]] = None,
 ):
     """
     Args:
@@ -251,6 +252,27 @@ def get_parser(desc, default_task="translation"):
     return parser
 
 
+def add_ac_args(parser):
+    from fairseq.tasks import TASK_REGISTRY
+    from fairseq.criterions import CRITERION_REGISTRY
+    parser.add_argument('--actor-restore-file', default='checkpoints/actor/model.pt', metavar='DIR',
+                        help='path to restore actor')
+    parser.add_argument('--actor-task', default='translation', metavar='TASK',
+                        choices=TASK_REGISTRY.keys(), help='task for actor')
+    parser.add_argument('--actor-criterion', default='ac-loss-actor', metavar='CRITERION',
+                        choices=CRITERION_REGISTRY.keys(), help='criterion for actor')
+    parser.add_argument('--actor-save-update', '--asu', default=0, type=int, metavar='N',
+                        help='force stop training actor at specified update')
+    parser.add_argument('--critic-restore-file', default='checkpoints/critic/model.pt', metavar='DIR',
+                        help='path to restore critic')
+    parser.add_argument('--critic-task', default='translation', metavar='TASK',
+                        choices=TASK_REGISTRY.keys(), help='task for critic')
+    parser.add_argument('--critic-criterion', default='ac-loss-critic', metavar='CRITERION',
+                        choices=CRITERION_REGISTRY.keys(), help='criterion for critic')
+    parser.add_argument('--critic-save-update', '--csu', default=0, type=int, metavar='N',
+                        help='force stop training critic at specified update')
+
+
 def add_preprocess_args(parser):
     group = parser.add_argument_group("Preprocessing")
     # fmt: off
@@ -379,12 +401,12 @@ def add_distributed_training_args(parser):
                             're-reading the data')
     group.add_argument('--find-unused-parameters', default=False, action='store_true',
                        help='disable unused parameter detection (not applicable to '
-                       'no_c10d ddp-backend')
+                            'no_c10d ddp-backend')
     group.add_argument('--fast-stat-sync', default=False, action='store_true',
                        help='[deprecated] this is now defined per Criterion')
     group.add_argument('--broadcast-buffers', default=False, action='store_true',
                        help='Copy non-trainable parameters between GPUs, such as '
-                      'batchnorm population statistics')
+                            'batchnorm population statistics')
     # fmt: on
     return group
 
@@ -452,6 +474,8 @@ def add_checkpoint_args(parser):
                        help='don\'t store last checkpoints')
     group.add_argument('--no-save-optimizer-state', action='store_true',
                        help='don\'t save optimizer-state as part of checkpoint')
+    group.add_argument('--no-save-criterion', action='store_true',
+                       help='don\'t save criterion as part of checkpoint')
     group.add_argument('--best-checkpoint-metric', type=str, default='loss',
                        help='metric to use for saving "best" checkpoints')
     group.add_argument('--maximize-best-checkpoint-metric', action='store_true',

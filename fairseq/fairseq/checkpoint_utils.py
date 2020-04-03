@@ -282,7 +282,7 @@ def save_state(
         ],
         "extra_state": extra_state,
     }
-    if utils.has_parameters(criterion):
+    if utils.has_parameters(criterion) and not args.no_save_criterion:
         state_dict["criterion"] = criterion.state_dict()
     if not args.no_save_optimizer_state:
         state_dict["last_optimizer_state"] = convert_state_dict_type(

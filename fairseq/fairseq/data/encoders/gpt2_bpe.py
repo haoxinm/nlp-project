@@ -47,3 +47,27 @@ class GPT2BPE(object):
 
     def is_beginning_of_word(self, x: str) -> bool:
         return self.decode(x).startswith(' ')
+
+
+class GPT2BPE_modified(object):
+
+    def __init__(self, encoder_json, vocab_bpe):
+        encoder_json = file_utils.cached_path(
+            encoder_json
+        )
+        vocab_bpe = file_utils.cached_path(
+            vocab_bpe
+        )
+        self.bpe = get_encoder(encoder_json, vocab_bpe)
+
+    def encode(self, x: str) -> str:
+        return ' '.join(map(str, self.bpe.encode(x)))
+
+    def decode(self, x: str) -> str:
+        return self.bpe.decode([
+            int(tok) if tok not in {'<unk>', '<mask>'} else tok
+            for tok in x.split()
+        ])
+
+    def is_beginning_of_word(self, x: str) -> bool:
+        return self.decode(x).startswith(' ')

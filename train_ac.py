@@ -156,12 +156,12 @@ def main(args, init_distributed=False):
 def get_ready(args, ac='a'):
     train_args = deepcopy(args)
     if ac=='a':
-        train_args.restore_file = args.actor_path
+        train_args.restore_file = args.actor_restore_file
         train_args.task = args.actor_task
         train_args.criterion = args.actor_criterion
         train_args.save_interval_updates = args.actor_save_update
     elif ac=='c':
-        train_args.restore_file = args.critic_path
+        train_args.restore_file = args.critic_restore_file
         train_args.task = args.critic_task
         train_args.criterion = args.critic_criterion
         train_args.save_interval_updates = args.critic_save_update

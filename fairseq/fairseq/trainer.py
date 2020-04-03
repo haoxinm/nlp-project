@@ -195,10 +195,11 @@ class Trainer(object):
                 self.get_model().load_state_dict(
                     state["model"], strict=True, args=self.args
                 )
-                if utils.has_parameters(self.get_criterion()):
-                    self.get_criterion().load_state_dict(
-                        state["criterion"], strict=True
-                    )
+                # print(self.get_criterion())
+                # if utils.has_parameters(self.get_criterion()):
+                #     self.get_criterion().load_state_dict(
+                #         state["criterion"], strict=True
+                #     )
             except Exception:
                 raise Exception(
                     "Cannot load model parameters from checkpoint {}; "
@@ -479,6 +480,7 @@ class Trainer(object):
                 _loss, sample_size, logging_output = self.task.valid_step(
                     sample, self.model, self.criterion
                 )
+                # torch.cuda.empty_cache()
             except RuntimeError as e:
                 if "out of memory" in str(e):
                     self._log_oom(e)

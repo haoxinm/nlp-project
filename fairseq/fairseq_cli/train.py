@@ -63,7 +63,7 @@ def main(args, init_distributed=False):
     # Build model and criterion
     model = task.build_model(args)
     criterion = task.build_criterion(args)
-    logger.info(model)
+    # logger.info(model)
     logger.info('model {}, criterion {}'.format(args.arch, criterion.__class__.__name__))
     logger.info('num. model params: {} (num. trained: {})'.format(
         sum(p.numel() for p in model.parameters()),
@@ -85,6 +85,7 @@ def main(args, init_distributed=False):
     # Load the latest checkpoint if one is available and restore the
     # corresponding train iterator
     extra_state, epoch_itr = checkpoint_utils.load_checkpoint(args, trainer)
+    epoch_itr.seed = args.seed
 
     # Train until the learning rate gets too small
     max_epoch = args.max_epoch or math.inf
@@ -178,8 +179,10 @@ def train(args, trainer, task, epoch_itr):
     valid_subsets = args.valid_subset.split(',')
     max_update = args.max_update or math.inf
     for samples in progress:
+        # print(samples[0]['id'])
         with metrics.aggregate('train_inner'):
             log_output = trainer.train_step(samples)
+            # torch.cuda.empty_cache()
             if log_output is None:  # OOM, overflow, ...
                 continue
 
@@ -262,6 +265,7 @@ def validate(args, trainer, task, epoch_itr, subsets):
         with metrics.aggregate(new_root=True) as agg:
             for sample in progress:
                 trainer.valid_step(sample)
+                # torch.cuda.empty_cache()
 
         # log validation stats
         stats = get_valid_stats(args, trainer, agg.get_smoothed_values())
