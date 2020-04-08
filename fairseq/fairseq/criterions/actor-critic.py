@@ -1,12 +1,12 @@
 import math
-
 import numpy as np
 import torch
 import torch.nn.functional as F
+from torch.autograd import Variable
+from pytorch_transformers import BertModel, BertTokenizer
 from fairseq import metrics, utils
 from fairseq.data.encoders.gpt2_bpe import GPT2BPE_modified
 from fairseq.models.bart import BARTModel
-
 from . import FairseqCriterion, register_criterion
 
 
@@ -98,11 +98,119 @@ def critic_loss(net_input, target, task=None, bpe=None, critic=None, output_toke
     return critic_score
 
 
+def raw_bert_encoder(model, tokenizer, sent_list, stride=128):
+    merged_text = ''
+    for ss in sent_list: merged_text += ss+' '
+    tokens = tokenizer.encode(merged_text)
+    #print(len(tokens))
+
+    model.eval()
+    #with torch.no_grad():
+    if True:
+        if len(tokens) <= 510:
+            tokens = torch.tensor(tokens).unsqueeze(0).to(next(model.parameters()).device)
+            vv = model(tokens)[0][0]
+            vv = vv.mean(dim=0)
+        else:
+            end_pointer = stride
+            batch = []
+            real_length = []
+            att_masks = []
+            while True:
+                start_pointer = end_pointer-510
+                if start_pointer < 0: start_pointer = 0
+                if start_pointer >= len(tokens): break
+                if end_pointer <= len(tokens):
+                    batch.append(tokens[start_pointer:end_pointer])
+                    real_length.append(end_pointer-start_pointer)
+                    att_masks.append([1]*real_length[-1])
+                else:
+                    batch.append(tokens[start_pointer:end_pointer])
+                    real_length.append(len(tokens)-start_pointer)
+                    att_masks.append([1] * real_length[-1])
+                end_pointer += stride
+                #print(len(batch[-1]))
+
+            #padding
+            longest = max(real_length)
+            for ii in range(len(batch)):
+                batch[ii] += [0] * (longest-real_length[ii])
+                att_masks[ii] += [0] * (longest-real_length[ii])
+
+            batch = torch.tensor(batch)
+            att_masks = torch.tensor(att_masks)
+
+            last_layers = model(input_ids=batch,attention_mask=att_masks)[0]
+            vectors = []
+            for ii,bb in enumerate(last_layers):
+                vectors.append(bb[:real_length[ii]].mean(axis=0))
+            vv = torch.tensor(vectors).mean(dim=0)
+    return vv
+
+
+def build_model(model_type, vec_length, learn_rate=None):
+    if 'linear' in model_type:
+        deep_model = torch.nn.Sequential(
+            torch.nn.Linear(vec_length, 1),
+        )
+    else:
+        deep_model = torch.nn.Sequential(
+            torch.nn.Linear(vec_length, int(vec_length/2)),
+            torch.nn.ReLU(),
+            torch.nn.Linear(int(vec_length/2), 1),
+        )
+    if learn_rate is not None: # Not activated for SenSim
+        optimiser = torch.optim.Adam(deep_model.parameters(),lr=learn_rate)
+        print("Error! See rewarder.py")
+        raise
+        return deep_model, optimiser
+    else:
+        return deep_model
+
+
+class Rewarder:
+    def __init__(self,weight_path,model_type='linear',vec_dim=1024,device='cuda:0'):
+        self.device = device
+        # self.bert_tokenizer = BertTokenizer.from_pretrained('bert-large-uncased')
+        # self.bert_tokenizer.half()
+        # self.bert_model = BertModel.from_pretrained('bert-large-uncased')
+        # self.bert_model.half()
+        # self.bert_model.to(device)
+        # self.bert_model.eval()
+        self.reward_model = build_model(model_type, vec_dim*2) # times 2 because the input to the model is the concatenation of the doc-vec and the summ-vec
+        self.reward_model.load_state_dict(torch.load(weight_path))
+        self.reward_model.to(device)
+        self.reward_model.half()
+        self.reward_model.eval()
+
+    def __call__(self, output_vec, target_vec):
+
+        # output_vec = raw_bert_encoder(self.bert_model, self.bert_tokenizer, [output_txt])
+        # target_vec = raw_bert_encoder(self.bert_model, self.bert_tokenizer, [target_txt])
+        input_vec = torch.cat([target_vec, output_vec], dim=-1).half().to(self.device)
+        # print(input_vec.shape)
+        pred_score = self.reward_model(input_vec).view(1,-1)[0][0]
+        return pred_score.item()
+
+
+class Padder(torch.nn.Module):
+    def __init__(self, max_length):
+        super().__init__()
+        self.max_length = max_length
+
+    def forward(self, input):
+        # print(input.shape)
+        length = input.size(-1)
+        input = F.pad(input, (0, self.max_length - length), mode='constant', value=0)
+        # print(input.shape)
+        return input
+
+
 @register_criterion('ac_loss_actor')
 class ActorCriterion(FairseqCriterion):
 
     def __init__(self, task, encoder_json, vocab_bpe, critic_path, critic_file, sentence_avg, max_tokens,
-                 print_update, critic_weight, label_smoothing):
+                 print_update, critic_weight, label_smoothing, use_reward, rewarder_file, rewarder_weight):
         super().__init__(task)
         self.eps = label_smoothing
         # self.task = task
@@ -114,9 +222,15 @@ class ActorCriterion(FairseqCriterion):
         self.critic_weight = critic_weight
         # print(critic_path)
         self.critic = BARTModel.from_pretrained(critic_path, checkpoint_file=critic_file).model
-        # self.critic.half()
+        self.critic.half()
+        # self.critic = self.critic.cpu()
+        # self.critic.short()
         self.critic.eval()
-        # self.loss_weight = args.loss_weight
+        self.use_rewarder = use_reward
+        self.rewarder_weight = rewarder_weight
+        if use_reward:
+            self.padder = Padder(1024)
+            self.rewarder = Rewarder(rewarder_file)
 
     # '''
     @staticmethod
@@ -131,12 +245,18 @@ class ActorCriterion(FairseqCriterion):
                             help='file to load encoder.json')
         parser.add_argument('--vocab-bpe', default='vocab.bpe', metavar='DIR',
                             help='file to load vocab.bpe')
-        parser.add_argument('--critic-weight', default=500., type=float,
+        parser.add_argument('--critic-weight', default=100., type=float,
                             help='weight for critic score')
-        parser.add_argument('--print-update', default=100, type=int,
+        parser.add_argument('--print-update', default=10, type=int,
                             help='number of updates before printing the network output for check')
         parser.add_argument('--label-smoothing', default=0., type=float, metavar='D',
                             help='epsilon for label smoothing, 0 means no label smoothing')
+        parser.add_argument('--use-reward', action='store_true',
+                            help='whether to use rewarder')
+        parser.add_argument('--rewarder-file', default='pretrained/sample.model', metavar='DIR',
+                            help='file to load rewarder')
+        parser.add_argument('--rewarder-weight', default=500., type=float,
+                            help='weight for reward')
         # fmt: on
         # '''
 
@@ -153,6 +273,9 @@ class ActorCriterion(FairseqCriterion):
         # print(net_output)
         # loss = 0.
         net_output = utils.log_softmax(net_output, dim=-1)
+        device = net_output.device
+        net_output = net_output
+        # print(net_output.device)
         target = sample['target']
         t_shape = target.shape
         src_tokens = sample['net_input']['src_tokens']
@@ -180,6 +303,8 @@ class ActorCriterion(FairseqCriterion):
             smooth_loss = smooth_loss.sum()
         eps_i = self.eps / lprobs.size(-1)
         loss = (1. - self.eps) * nll_loss + eps_i * smooth_loss
+        # del lprobs, smooth_loss
+        # torch.cuda.empty_cache()
 
         # compute critic score
         target = target.view(t_shape)
@@ -195,15 +320,25 @@ class ActorCriterion(FairseqCriterion):
             output_txt = self.bpe.decode(self.task.target_dictionary.string(net_output))
             print("\n\n## sentence_txt: ", sentence_txt, "\n## target_txt: ", target_txt,
                   "\n## output_txt: ", output_txt, )
+
+        reward = 0.
+        if self.use_rewarder:
+        #     target_txt = self.bpe.decode(self.task.target_dictionary.string(target))
+        #     output_txt = self.bpe.decode(self.task.target_dictionary.string(net_output))
+            reward = self.rewarder(self.padder(net_output), self.padder(target))
+
         ub = net_output.size(0)
-        zeros = torch.zeros((ub, 1), device=net_output.device, dtype=net_output.dtype)
-        ones = torch.ones((ub, 1), device=net_output.device, dtype=net_output.dtype)
+        zeros = torch.zeros((ub, 1), device=device, dtype=net_output.dtype)
+        ones = torch.ones((ub, 1), device=device, dtype=net_output.dtype)
         txt_length = src_tokens.size(-1)
         summ_length = net_output.size(-1)
         if txt_length > self.max_tokens - 1 - summ_length:
             src_tokens = src_tokens[..., :self.max_tokens - summ_length - 2]
             src_tokens = torch.cat([src_tokens, 2 * ones], dim=-1)
         cat_input = torch.cat([zeros, src_tokens, net_output], dim=-1)
+        # print(device)
+        # cat_input = cat_input.to('cpu')
+        # print(cat_input.device)
         prev_output_tokens = cat_input.roll(1)
 
         net_output = self.critic(src_tokens=cat_input, src_lengths=None,
@@ -216,14 +351,20 @@ class ActorCriterion(FairseqCriterion):
                      ].view(net_output.size(0), -1, net_output.size(-1))[:, -1, :]
 
         net_output = self.critic.classification_heads['critic'](net_output)
-        net_output = F.softmax(net_output, dim=1)
-        critic_score = net_output[0, 0].item()
+        net_output = utils.log_softmax(net_output, dim=1)
+        # print(net_output)
+        critic_score = -1./net_output[0, 1].item()
+        # print(critic_score)
 
         if debug:
-            print("\n## score :", critic_score)
+            print("\n## critic score :", critic_score)
+            if self.use_rewarder:
+                print("\n## reward :", reward)
             print("===" * 10)
 
         loss = loss + self.critic_weight * critic_score
+        if self.use_rewarder:
+            loss = loss - self.rewarder_weight * reward
         sample_size = target.size(0) if self.sentence_avg else ntokens
         logging_output = {
             'loss': loss.item(),
@@ -233,6 +374,8 @@ class ActorCriterion(FairseqCriterion):
             'nsentences': target.size(0),
             'sample_size': sample_size,
         }
+        if self.use_rewarder:
+            logging_output['reward'] = reward
         # del critic_score, nll_loss
         # torch.cuda.empty_cache()
         return loss, sample_size, logging_output
@@ -279,6 +422,10 @@ class ActorCriterion(FairseqCriterion):
         metrics.log_scalar('nll_loss', nll_loss_sum / ntokens / math.log(2), ntokens, round=3)
         metrics.log_scalar('critic_score', critic_score_sum / sample_size / math.log(2), sample_size)
         metrics.log_derived('ppl', lambda meters: utils.get_perplexity(meters['nll_loss'].avg))
+
+        if 'reward' in logging_outputs[0].keys():
+            reward_sum = sum(log.get('reward', 0) for log in logging_outputs)
+            metrics.log_scalar('reward', reward_sum / sample_size / math.log(2), sample_size, round=3)
 
 
 @register_criterion('ac_loss_critic')
