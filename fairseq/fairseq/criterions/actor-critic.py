@@ -9,7 +9,7 @@ from fairseq.data.encoders.gpt2_bpe import GPT2BPE_modified
 from fairseq.models.bart import BARTModel
 from . import FairseqCriterion, register_criterion
 
-
+'''
 def label_smoothed_nll_loss(lprobs, target, epsilon, ignore_index=None, reduce=True):
     if target.dim() == lprobs.dim() - 1:
         target = target.unsqueeze(-1)
@@ -191,7 +191,7 @@ class Rewarder:
         # print(input_vec.shape)
         pred_score = self.reward_model(input_vec).view(1,-1)[0][0]
         return pred_score.item()
-
+'''
 
 class Padder(torch.nn.Module):
     def __init__(self, max_length):
@@ -230,7 +230,7 @@ class ActorCriterion(FairseqCriterion):
         self.rewarder_weight = rewarder_weight
         if use_reward:
             self.padder = Padder(1024)
-            self.rewarder = Rewarder(rewarder_file)
+            # self.rewarder = Rewarder(rewarder_file)
 
     # '''
     @staticmethod
@@ -273,7 +273,7 @@ class ActorCriterion(FairseqCriterion):
         # print(net_output)
         # loss = 0.
         net_output = utils.log_softmax(net_output, dim=-1)
-        device = net_output.device
+        # device = net_output.device
         net_output = net_output
         # print(net_output.device)
         target = sample['target']
@@ -328,8 +328,8 @@ class ActorCriterion(FairseqCriterion):
             reward = self.rewarder(self.padder(net_output), self.padder(target))
 
         ub = net_output.size(0)
-        zeros = torch.zeros((ub, 1), device=device, dtype=net_output.dtype)
-        ones = torch.ones((ub, 1), device=device, dtype=net_output.dtype)
+        zeros = torch.zeros((ub, 1), dtype=net_output.dtype).cuda()
+        ones = torch.ones((ub, 1), dtype=net_output.dtype).cuda()
         txt_length = src_tokens.size(-1)
         summ_length = net_output.size(-1)
         if txt_length > self.max_tokens - 1 - summ_length:
@@ -341,9 +341,10 @@ class ActorCriterion(FairseqCriterion):
         # print(cat_input.device)
         prev_output_tokens = cat_input.roll(1)
 
-        net_output = self.critic(src_tokens=cat_input, src_lengths=None,
-                            prev_output_tokens=prev_output_tokens,
-                            features_only=True, )[0]
+        with torch.no_grad():
+            net_output = self.critic(src_tokens=cat_input, src_lengths=None,
+                                prev_output_tokens=prev_output_tokens,
+                                features_only=True, )[0]
         idx = cat_input.eq(self.task.source_dictionary.eos())
         # del cat_input, prev_output_tokens
         # torch.cuda.empty_cache()
@@ -353,7 +354,7 @@ class ActorCriterion(FairseqCriterion):
         net_output = self.critic.classification_heads['critic'](net_output)
         net_output = utils.log_softmax(net_output, dim=1)
         # print(net_output)
-        critic_score = -1./net_output[0, 1].item()
+        critic_score = torch.exp(net_output[0, 1]).item()
         # print(critic_score)
 
         if debug:
@@ -379,7 +380,7 @@ class ActorCriterion(FairseqCriterion):
         # del critic_score, nll_loss
         # torch.cuda.empty_cache()
         return loss, sample_size, logging_output
-
+    '''
     def compute_loss(self, net_output, target, reduce=True):
         # device = net_output
         # net_output = utils.log_softmax(net_output, dim=-1).half()
@@ -408,7 +409,7 @@ class ActorCriterion(FairseqCriterion):
                         )
 
         return critic_score
-
+    '''
     @staticmethod
     def reduce_metrics(logging_outputs) -> None:
         """Aggregate logging outputs from data parallel training."""
@@ -471,21 +472,22 @@ class CriticCriterion(FairseqCriterion):
 
         # print(sample['net_input'].keys())
         sample['net_input']['prev_output_tokens'] = sample['target'].roll(1, dims=-1)
-        actor_output = self.actor(**sample['net_input'])
+        with torch.no_grad():
+            actor_output = self.actor(**sample['net_input'])
         # """
         if np.random.random() < 0.5:
             # use target
             output_tk = model.get_targets(sample, actor_output)
             ub = output_tk.size(0)
-            zeros = torch.zeros((ub, 1), device=output_tk.device, dtype=output_tk.dtype)
-            ones = torch.ones((ub, 1), device=output_tk.device, dtype=output_tk.dtype)
+            zeros = torch.zeros((ub, 1), dtype=output_tk.dtype).cuda()
+            ones = torch.ones((ub, 1), dtype=output_tk.dtype).cuda()
             new_target = zeros
         else:
             # use network output
             output_tk = torch.argmax(utils.log_softmax(actor_output[0], dim=-1), -1)
             ub = output_tk.size(0)
-            zeros = torch.zeros((ub, 1), device=output_tk.device, dtype=output_tk.dtype)
-            ones = torch.ones((ub, 1), device=output_tk.device, dtype=output_tk.dtype)
+            zeros = torch.zeros((ub, 1), dtype=output_tk.dtype).cuda()
+            ones = torch.ones((ub, 1), dtype=output_tk.dtype).cuda()
             new_target = ones
         '''
         actor_output_tk = torch.argmax(utils.log_softmax(actor_output[0], dim=-1), -1)

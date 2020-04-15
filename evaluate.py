@@ -11,6 +11,7 @@ parser.add_argument('--checkpoint-file', default='checkpoint_best.pt', metavar='
                             help='file to load actor')
 parser.add_argument('--dataset', default='cnn_dm', metavar='DIR',
                             help='dataset to evaluate')
+parser.add_argument('--cpu', action='store_true', help='use CPU instead of CUDA')
 
 args, _ = parser.parse_known_args()
 
@@ -20,9 +21,15 @@ bart = BARTModel.from_pretrained(
     data_name_or_path=args.dataset+'-bin'
 )
 
-bart.cuda()
+if args.cpu:
+    bart.cpu()
+else:
+    bart.cuda()
+    bart.half()
+
 bart.eval()
-bart.half()
+# if torch.cuda.device_count() > 1:
+#     bart.model = torch.nn.DataParallel(bart.model)
 count = 1
 bsz = 32
 num_lines = sum(1 for _ in open(args.dataset+'/test.source'))
