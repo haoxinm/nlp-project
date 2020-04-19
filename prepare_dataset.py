@@ -56,7 +56,7 @@ def spilt_tsv(source_file, target_file, hypo_file, output_file):
             i1_writer.writerow([target_line])
             # label_writer.writerow([1])
 if __name__ == '__main__':
-    base_path = 'scisumm-corpus/'
+    base_path = 'short_story/'
     for source in ['val']:
         source_file = base_path + source + '.source'
         target_file = base_path + source + '.target'
