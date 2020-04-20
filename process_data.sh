@@ -39,8 +39,8 @@
 
 
 
-#TASK=scisumm-corpus
-TASK=short_story
+TASK=scisumm-corpus
+#TASK=short_story
 for SPLIT in train val
 do
   for LANG in source target

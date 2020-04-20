@@ -25,8 +25,11 @@ train_output_text_file = open("short_story/train.source", "w",encoding="utf-8")
 train_output_summary_file = open("short_story/train.target", "w",encoding="utf-8")
 val_output_text_file = open("short_story/val.source", "w",encoding="utf-8")
 val_output_summary_file = open("short_story/val.target", "w",encoding="utf-8")
+test_output_text_file = open("short_story/test.source", "w",encoding="utf-8")
+test_output_summary_file = open("short_story/test.target", "w",encoding="utf-8")
 train_count= 0
 val_count=0
+test_count=0
 subdir1_list = os.listdir(basedir)
 for subdir1_enum in subdir1_list:
     subdir2 = basedir+ '/'+ subdir1_enum
@@ -40,8 +43,7 @@ for subdir1_enum in subdir1_list:
             f_summary = open(subdir4 + "/summary.txt", "r", encoding="utf-8")
             text_data = f_text.read()
             summary_data = f_summary.read()
-            train_count += 1
-            val_count+=1
+
             # sent_list_text = tokenize.sent_tokenize(text_data)
             # sent_list_summary = tokenize.sent_tokenize(summary_data)
             output_text_string = text_data.replace('\n', ' ')
@@ -55,17 +57,27 @@ for subdir1_enum in subdir1_list:
             # for item in sent_list_summary:
             #     item=item.replace('\n',' ')
             #     output_summary_string+=item
-            if np.random.random() < 0.75:
+            i=np.random.random()
+            if i < 0.8:
+                train_count += 1
                 train_output_text_file.writelines(output_text_string + '\n')
                 train_output_summary_file.writelines(output_summary_string + '\n')
-            else:
+            elif i>=0.8 and i<0.9:
+                val_count += 1
                 val_output_text_file.writelines(output_text_string + '\n')
                 val_output_summary_file.writelines(output_summary_string + '\n')
+            else:
+                test_count += 1
+                test_output_text_file.writelines(output_text_string + '\n')
+                test_output_summary_file.writelines(output_summary_string + '\n')
 
 train_output_text_file.close()
 train_output_summary_file.close()
 val_output_text_file.close()
 val_output_summary_file.close()
+test_output_text_file.close()
+test_output_summary_file.close()
 
 print("train_count:"+str(train_count))
 print("val_count:"+str(val_count))
+print("test_count:"+str(test_count))
