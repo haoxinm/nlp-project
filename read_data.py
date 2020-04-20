@@ -1,5 +1,5 @@
-import nltk.data
-from nltk import tokenize
+# import nltk.data
+# from nltk import tokenize
 
 # # basedir = './Authors/Alice Munro/Mrs. Cross and Mrs. Kidd/'
 # basedir = './'
@@ -17,12 +17,16 @@ from nltk import tokenize
 import glob
 import pdb
 import os
+import numpy as np
 
 
 basedir = './data'
-output_text_file = open("short_story/val.source", "w",encoding="utf-8")
-output_summary_file = open("short_story/val.target", "w",encoding="utf-8")
-count_text= 0
+train_output_text_file = open("short_story/train.source", "w",encoding="utf-8")
+train_output_summary_file = open("short_story/train.target", "w",encoding="utf-8")
+val_output_text_file = open("short_story/val.source", "w",encoding="utf-8")
+val_output_summary_file = open("short_story/val.target", "w",encoding="utf-8")
+train_count= 0
+val_count=0
 subdir1_list = os.listdir(basedir)
 for subdir1_enum in subdir1_list:
     subdir2 = basedir+ '/'+ subdir1_enum
@@ -36,7 +40,8 @@ for subdir1_enum in subdir1_list:
             f_summary = open(subdir4 + "/summary.txt", "r", encoding="utf-8")
             text_data = f_text.read()
             summary_data = f_summary.read()
-            count_text += 1
+            train_count += 1
+            val_count+=1
             # sent_list_text = tokenize.sent_tokenize(text_data)
             # sent_list_summary = tokenize.sent_tokenize(summary_data)
             output_text_string = text_data.replace('\n', ' ')
@@ -50,9 +55,17 @@ for subdir1_enum in subdir1_list:
             # for item in sent_list_summary:
             #     item=item.replace('\n',' ')
             #     output_summary_string+=item
-            output_text_file.writelines(output_text_string + '\n')
-            output_summary_file.writelines(output_summary_string + '\n')
-output_text_file.close()
-output_summary_file.close()
+            if np.random.random() < 0.75:
+                train_output_text_file.writelines(output_text_string + '\n')
+                train_output_summary_file.writelines(output_summary_string + '\n')
+            else:
+                val_output_text_file.writelines(output_text_string + '\n')
+                val_output_summary_file.writelines(output_summary_string + '\n')
 
-print(count_text)
+train_output_text_file.close()
+train_output_summary_file.close()
+val_output_text_file.close()
+val_output_summary_file.close()
+
+print("train_count:"+str(train_count))
+print("val_count:"+str(val_count))
