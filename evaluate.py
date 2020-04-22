@@ -11,6 +11,8 @@ parser.add_argument('--checkpoint-file', default='checkpoint_best.pt', metavar='
                             help='file to load actor')
 parser.add_argument('--dataset', default='cnn_dm', metavar='DIR',
                             help='dataset to evaluate')
+parser.add_argument('--batch-size', default=50, metavar='N', type=int,
+                            help='dataset to evaluate')
 parser.add_argument('--cpu', action='store_true', help='use CPU instead of CUDA')
 
 args, _ = parser.parse_known_args()
@@ -31,7 +33,7 @@ bart.eval()
 # if torch.cuda.device_count() > 1:
 #     bart.model = torch.nn.DataParallel(bart.model)
 count = 1
-bsz = 50
+bsz = args.batch_size
 num_lines = sum(1 for _ in open(args.dataset+'/test.source'))
 with open(args.dataset+'/test.source') as source, open(args.dataset+'/test.hypo', 'w') as fout:
     sline = source.readline().strip()
