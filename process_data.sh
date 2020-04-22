@@ -45,7 +45,7 @@ for SPLIT in train val
 do
   for LANG in source target
   do
-    python fairseq/examples/roberta/multiprocessing_bpe_encoder.py \
+    python3 fairseq/examples/roberta/multiprocessing_bpe_encoder.py \
     --encoder-json encoder.json \
     --vocab-bpe vocab.bpe \
     --inputs "$TASK/$SPLIT.$LANG" \

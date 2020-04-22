@@ -125,3 +125,4 @@ data-bin/
 
 # Experimental Folder
 experimental/*
+/fairseq/
