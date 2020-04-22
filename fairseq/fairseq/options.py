@@ -604,6 +604,10 @@ def add_interactive_args(parser):
                        help='read this many sentences into a buffer before processing them')
     group.add_argument('--input', default='-', type=str, metavar='FILE',
                        help='file to read from; use - for stdin')
+    group.add_argument('--output-to-file', action='store_true',
+                       help='if set, write output texts to file')
+    group.add_argument('--output', default='-', type=str, metavar='FILE',
+                       help='file to read from; use - for stdin')
     # fmt: on
 
 

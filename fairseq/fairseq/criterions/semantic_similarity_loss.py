@@ -10,7 +10,7 @@ import math
 from fairseq import utils
 from fairseq.data import encoders
 
-from . import FairseqCriterion, register_criterion
+from . import FairseqCriterion, register_criterion, LegacyFairseqCriterion
 
 import torch
 from semsim.rewarder import Rewarder
@@ -29,8 +29,8 @@ def sesim_loss(lprobs, target, epsilon, task=None, bpe=None, rewarder=None, outp
         target_ig = target[non_pad_mask]
 
     target_txt = bpe.decode(task.target_dictionary.string(target_ig))
-
-    semsim_score = rewarder(target_txt, sentence_txt)
+    with torch.no_grad():
+        semsim_score = rewarder(target_txt, sentence_txt)
     if debug:
         print("\n\n## sentence_txt: ", sentence_txt, "\n## target_txt: ", target_txt, "\n## Reward :", semsim_score)
 
@@ -63,7 +63,7 @@ def sesim_loss(lprobs, target, epsilon, task=None, bpe=None, rewarder=None, outp
 
 
 @register_criterion('semantic_similarity_loss')
-class SemanticSimilarityCriterion(FairseqCriterion):
+class SemanticSimilarityCriterion(LegacyFairseqCriterion):
 
     def __init__(self, args, task):
         super().__init__(args, task)
@@ -76,9 +76,9 @@ class SemanticSimilarityCriterion(FairseqCriterion):
         if args.rewarderpath == None:
             args.rewarderpath = "./semsim/trained_models/" + args.restore_file.split('/')[-1] # TODO : refactoring required
             print("args.rewarderpath not set : use %s instead."%args.rewarderpath) """
-        args.rewarderpath = "./semsim/trained_models/sample.model"  # TODO
+        args.rewarderpath = "/home/marquess_mar96/nlp/fairseq-semsim/pretrained/sample.model"  # TODO
         self.rewarder = Rewarder(args.rewarderpath)
-        self.loss_weight = args.loss_weight
+        self.loss_weight = 100
 
     @staticmethod
     def add_args(parser):

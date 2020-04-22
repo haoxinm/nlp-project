@@ -31,7 +31,7 @@ bart.eval()
 # if torch.cuda.device_count() > 1:
 #     bart.model = torch.nn.DataParallel(bart.model)
 count = 1
-bsz = 32
+bsz = 50
 num_lines = sum(1 for _ in open(args.dataset+'/test.source'))
 with open(args.dataset+'/test.source') as source, open(args.dataset+'/test.hypo', 'w') as fout:
     sline = source.readline().strip()

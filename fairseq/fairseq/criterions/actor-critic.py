@@ -97,7 +97,7 @@ def critic_loss(net_input, target, task=None, bpe=None, critic=None, output_toke
 
     return critic_score
 
-
+'''
 def raw_bert_encoder(model, tokenizer, sent_list, stride=128):
     merged_text = ''
     for ss in sent_list: merged_text += ss+' '
@@ -105,8 +105,8 @@ def raw_bert_encoder(model, tokenizer, sent_list, stride=128):
     #print(len(tokens))
 
     model.eval()
-    #with torch.no_grad():
-    if True:
+    with torch.no_grad():
+        # if True:
         if len(tokens) <= 510:
             tokens = torch.tensor(tokens).unsqueeze(0).to(next(model.parameters()).device)
             vv = model(tokens)[0][0]
@@ -147,7 +147,7 @@ def raw_bert_encoder(model, tokenizer, sent_list, stride=128):
             vv = torch.tensor(vectors).mean(dim=0)
     return vv
 
-
+# '''
 def build_model(model_type, vec_length, learn_rate=None):
     if 'linear' in model_type:
         deep_model = torch.nn.Sequential(
@@ -171,27 +171,27 @@ def build_model(model_type, vec_length, learn_rate=None):
 class Rewarder:
     def __init__(self,weight_path,model_type='linear',vec_dim=1024,device='cuda:0'):
         self.device = device
-        # self.bert_tokenizer = BertTokenizer.from_pretrained('bert-large-uncased')
+        self.bert_tokenizer = BertTokenizer.from_pretrained('bert-large-uncased')
         # self.bert_tokenizer.half()
-        # self.bert_model = BertModel.from_pretrained('bert-large-uncased')
+        self.bert_model = BertModel.from_pretrained('bert-large-uncased')
         # self.bert_model.half()
-        # self.bert_model.to(device)
-        # self.bert_model.eval()
+        self.bert_model.cuda()
+        self.bert_model.eval()
         self.reward_model = build_model(model_type, vec_dim*2) # times 2 because the input to the model is the concatenation of the doc-vec and the summ-vec
         self.reward_model.load_state_dict(torch.load(weight_path))
-        self.reward_model.to(device)
+        self.reward_model.cuda()
         self.reward_model.half()
         self.reward_model.eval()
 
-    def __call__(self, output_vec, target_vec):
+    def __call__(self, output_txt, target_txt):
 
-        # output_vec = raw_bert_encoder(self.bert_model, self.bert_tokenizer, [output_txt])
-        # target_vec = raw_bert_encoder(self.bert_model, self.bert_tokenizer, [target_txt])
+        output_vec = raw_bert_encoder(self.bert_model, self.bert_tokenizer, [output_txt])
+        target_vec = raw_bert_encoder(self.bert_model, self.bert_tokenizer, [target_txt])
         input_vec = torch.cat([target_vec, output_vec], dim=-1).half().to(self.device)
         # print(input_vec.shape)
         pred_score = self.reward_model(input_vec).view(1,-1)[0][0]
         return pred_score.item()
-'''
+# '''
 
 class Padder(torch.nn.Module):
     def __init__(self, max_length):
@@ -229,8 +229,8 @@ class ActorCriterion(FairseqCriterion):
         self.use_rewarder = use_reward
         self.rewarder_weight = rewarder_weight
         if use_reward:
-            self.padder = Padder(1024)
-            # self.rewarder = Rewarder(rewarder_file)
+            # self.padder = Padder(1024)
+            self.rewarder = Rewarder(rewarder_file)
 
     # '''
     @staticmethod
@@ -255,7 +255,7 @@ class ActorCriterion(FairseqCriterion):
                             help='whether to use rewarder')
         parser.add_argument('--rewarder-file', default='pretrained/sample.model', metavar='DIR',
                             help='file to load rewarder')
-        parser.add_argument('--rewarder-weight', default=500., type=float,
+        parser.add_argument('--rewarder-weight', default=100., type=float,
                             help='weight for reward')
         # fmt: on
         # '''
@@ -323,9 +323,10 @@ class ActorCriterion(FairseqCriterion):
 
         reward = 0.
         if self.use_rewarder:
-        #     target_txt = self.bpe.decode(self.task.target_dictionary.string(target))
-        #     output_txt = self.bpe.decode(self.task.target_dictionary.string(net_output))
-            reward = self.rewarder(self.padder(net_output), self.padder(target))
+            target_txt = self.bpe.decode(self.task.target_dictionary.string(target))
+            output_txt = self.bpe.decode(self.task.target_dictionary.string(net_output))
+            with torch.no_grad():
+                reward = self.rewarder(output_txt, target_txt)
 
         ub = net_output.size(0)
         zeros = torch.zeros((ub, 1), dtype=net_output.dtype).cuda()
@@ -342,23 +343,24 @@ class ActorCriterion(FairseqCriterion):
         prev_output_tokens = cat_input.roll(1)
 
         with torch.no_grad():
-            net_output = self.critic(src_tokens=cat_input, src_lengths=None,
+            critic_score = self.critic(src_tokens=cat_input, src_lengths=None,
                                 prev_output_tokens=prev_output_tokens,
-                                features_only=True, )[0]
-        idx = cat_input.eq(self.task.source_dictionary.eos())
-        # del cat_input, prev_output_tokens
-        # torch.cuda.empty_cache()
-        net_output = net_output[idx, :
-                     ].view(net_output.size(0), -1, net_output.size(-1))[:, -1, :]
+                                features_only=True, classification_head_name='critic')[0]
+            # batch = net_output.size(0)
+            # idx = cat_input.eq(self.task.source_dictionary.eos())
+            # del cat_input, prev_output_tokens
+            # torch.cuda.empty_cache()
+            # critic_score = net_output[idx, :
+            #              ].view(net_output.size(0), -1, net_output.size(-1))[:, -1, :]
 
-        net_output = self.critic.classification_heads['critic'](net_output)
-        net_output = utils.log_softmax(net_output, dim=1)
+            # critic_score = self.critic.classification_heads['critic'](critic_score)
+        critic_score = utils.log_softmax(critic_score, dim=1)
         # print(net_output)
-        critic_score = torch.exp(net_output[0, 1]).item()
+        critic_score = torch.exp(critic_score[0, 1])
         # print(critic_score)
 
         if debug:
-            print("\n## critic score :", critic_score)
+            print("\n## critic score :", critic_score.item())
             if self.use_rewarder:
                 print("\n## reward :", reward)
             print("===" * 10)
@@ -370,7 +372,7 @@ class ActorCriterion(FairseqCriterion):
         logging_output = {
             'loss': loss.item(),
             'nll_loss': nll_loss.item(),
-            'critic_score': critic_score,
+            'critic_score': critic_score.item(),
             'ntokens': ntokens,
             'nsentences': target.size(0),
             'sample_size': sample_size,
