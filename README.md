@@ -5,3 +5,8 @@ This is the repository for the course project of CS7650 NLP. It contains our cod
 our modified version of [Learning by Semantic Similarity Makes Abstractive Summarization Better](https://github.com/icml-2020-nlp/semsim).
 
 ## folder description
+```
+/--|fairseq/
+   |README.md
+   |
+```

@@ -13,6 +13,7 @@ __pycache__/
 *.model
 input.txt
 input.txt.json
+rouge_score.txt
 download_glue_data.py
 
 # macOS dir files
