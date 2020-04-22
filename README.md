@@ -125,7 +125,7 @@ DATASET=cnn_dm-bin/
 
 for I in $(seq 0 $((TOTAL_NUM_UPDATES-1)))
 do
-CUDA_VISIBLE_DEVICES=$DEVICES unbuffer python3 fairseq/train.py $DATASET \
+CUDA_VISIBLE_DEVICES=$DEVICES python3 fairseq/train.py $DATASET \
     --restore-file $CRITIC_PATH \
     --max-tokens $MAX_TOKENS\
     --max-sentences 1\
@@ -161,7 +161,7 @@ CUDA_VISIBLE_DEVICES=$DEVICES unbuffer python3 fairseq/train.py $DATASET \
     --skip-invalid-size-inputs-valid-test \
     --best-checkpoint-metric accuracy --maximize-best-checkpoint-metric;
 
-CUDA_VISIBLE_DEVICES=$DEVICES unbuffer python3 fairseq/train.py $DATASET \
+CUDA_VISIBLE_DEVICES=$DEVICES python3 fairseq/train.py $DATASET \
     --restore-file $ACTOR_PATH \
     --max-tokens $MAX_TOKENS \
     --max-sentences 1\
