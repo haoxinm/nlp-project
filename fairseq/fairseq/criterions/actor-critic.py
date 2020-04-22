@@ -104,7 +104,7 @@ def critic_loss(net_input, target, task=None, bpe=None, critic=None, output_toke
 class ActorCriterion(FairseqCriterion):
 
     def __init__(self, task, encoder_json, vocab_bpe, critic_path, critic_file, sentence_avg, max_tokens,
-                 print_update, critic_weight, label_smoothing, use_reward, rewarder_file, rewarder_weight):
+                 print_update, critic_weight, label_smoothing):
         super().__init__(task)
         self.eps = label_smoothing
         # self.task = task
