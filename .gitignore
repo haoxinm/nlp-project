@@ -16,6 +16,10 @@ input.txt.json
 rouge_score.txt
 download_glue_data.py
 inference.py
+prepare_dataset.py
+test.py
+train_ac.py
+train_critic.py
 
 # macOS dir files
 .DS_Store

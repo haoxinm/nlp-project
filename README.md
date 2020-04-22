@@ -8,5 +8,6 @@ our modified version of [Learning by Semantic Similarity Makes Abstractive Summa
 ```
 /--|fairseq/
    |README.md
-   |
+   |evaluate.py
+   |network structure.png
 ```
