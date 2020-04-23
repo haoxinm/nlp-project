@@ -200,7 +200,7 @@ CUDA_VISIBLE_DEVICES=$DEVICES python3 fairseq/train.py $DATASET \
 done
 ``` 
 
-Training for one epoch of `CNN_DM` dataset takes ~48 hrs on a single NVIDIA Tesla T4 GPU, and training with validation and checkpoint saving periodically takes longer time. We have trained the model for roughly 5 epochs to achieve the result in the final report.
+Training for one epoch of `CNN_DM` dataset takes ~50 hrs on a single NVIDIA Tesla T4 GPU, and training with validation and checkpoint saving periodically takes longer time. We have trained the model for roughly 3 epochs to achieve the result in the final report.
 
 ## inference and evaluation
 
