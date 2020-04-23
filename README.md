@@ -7,11 +7,14 @@ our modified version of [Learning by Semantic Similarity Makes Abstractive Summa
 ## folder description
 ```
 /--|fairseq/
+   |short_story/
    |README.md
    |evaluate.py
    |network structure.png
 ```
 *  `/fairseq` : The codes for our model. Modified from [fairseq (v 0.9.0)](https://github.com/pytorch/fairseq)
+*  `/short_story` : The raw un-processed data for the English short story dataset we collect.
+The `*.source` files contain the original documents and the `*.target` files contain the human annotated summaries.
 
 Please notice that we currently don't provide any pre-trained models or processed data.
 ## requirements and installation
